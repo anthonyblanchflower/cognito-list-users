@@ -26,14 +26,17 @@ def get_args():
         return val
 
 
-def get_user_pool_dictionary(pool_id):
+def get_user_pool_dictionary(pool_id, client_id):
 
-    client = boto3.client('cognito-idp')
+    cognito_client = boto3.client('cognito-idp')
 
     user_pool_dict = {}
 
-    user_pool_identity = client.describe_user_pool(UserPoolId=pool_id)
+    user_pool_identity = cognito_client.describe_user_pool(UserPoolId=pool_id)
+    user_pool_client_identity = cognito_client.describe_user_pool_client(UserPoolId=pool_id, ClientId=client_id)
+
     user_pool = user_pool_identity['UserPool']
+    user_pool_client = user_pool_client_identity['UserPoolClient']
     user_pool_dict['name'] = user_pool['Name']
     user_pool_dict['policies'] = user_pool['Policies']
     user_pool_dict['created_on'] = str(user_pool['CreationDate'])
@@ -48,6 +51,13 @@ def get_user_pool_dictionary(pool_id):
     user_pool_dict['domain'] = user_pool['Domain']
     user_pool_dict['admin_create_user_config'] = user_pool['AdminCreateUserConfig']
     user_pool_dict['arn'] = user_pool['Arn']
+    user_pool_dict['client_name'] = user_pool_client['ClientName']
+    user_pool_dict['client_secret'] = user_pool_client['ClientSecret']
+    user_pool_dict['client_callback_url'] = user_pool_client['CallbackURLs']
+    user_pool_dict['client_logout_urls'] = user_pool_client['LogoutURLs']
+    user_pool_dict['client_allowed_oauth_scopes'] = user_pool_client['AllowedOAuthScopes']
+    user_pool_dict['client_allowed_oauth_flows'] = user_pool_client['AllowedOAuthFlows']
+    user_pool_dict['client_explicit_oauth_flows'] = user_pool_client['ExplicitAuthFlows']
 
     return user_pool_dict
 
@@ -66,7 +76,7 @@ if __name__ == "__main__":
     user_pool_id = pool_args['user_pool_id']
     pool_client_id = pool_args['client_id']
 
-    pool_dictionary = get_user_pool_dictionary(user_pool_id)
+    pool_dictionary = get_user_pool_dictionary(user_pool_id, pool_client_id)
 
     pool_user_list = get_user_pool_list(user_pool_id, pool_client_id)
 
