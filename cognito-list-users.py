@@ -1,10 +1,7 @@
-from warrant import Cognito
 import boto3
 import argparse
 import sys
 import json
-
-args = ''
 
 
 def get_args():
@@ -12,23 +9,36 @@ def get_args():
     parser = argparse.ArgumentParser(description='Cognito parameters')
     parser.add_argument('--user_pool_id',metavar='user_pool_id',help='Specify user pool id')
     parser.add_argument('--client_id', metavar='client_id', help='Specify user pool client id')
+    parser.add_argument('--region', metavar='region', help='Specify region')
+    parser.add_argument('--role_arn', metavar='role_arn', help='Specify role arn')
 
     global args
 
     args = parser.parse_args()
     val['user_pool_id'] = args.user_pool_id
     val['client_id'] = args.client_id
+    val['region'] = args.region
+    val['role_arn'] = args.role_arn
 
-    if not args.user_pool_id or not args.client_id:
+    if not args.user_pool_id or not args.client_id or not args.region or not args.role_arn:
         parser.print_help()
         sys.exit(1)
     else:
         return val
 
 
-def get_user_pool_dictionary(pool_id, client_id):
+def get_user_pool_dictionary(pool_id, client_id, region, role_arn):
 
-    cognito_client = boto3.client('cognito-idp')
+    sts_client = boto3.client('sts')
+    assumed_role_object = sts_client.assume_role(RoleArn=role_arn,
+                                                 RoleSessionName="cognito-describe-pool")
+    session = boto3.Session(
+        aws_access_key_id=assumed_role_object['Credentials']['AccessKeyId'],
+        aws_secret_access_key=assumed_role_object['Credentials']['SecretAccessKey'],
+        aws_session_token=assumed_role_object['Credentials']['SessionToken'],
+        region_name=region)
+
+    cognito_client = session.client('cognito-idp')
 
     user_pool_dict = {}
 
@@ -52,7 +62,6 @@ def get_user_pool_dictionary(pool_id, client_id):
     user_pool_dict['admin_create_user_config'] = user_pool['AdminCreateUserConfig']
     user_pool_dict['arn'] = user_pool['Arn']
     user_pool_dict['client_name'] = user_pool_client['ClientName']
-    user_pool_dict['client_secret'] = user_pool_client['ClientSecret']
     user_pool_dict['client_callback_url'] = user_pool_client['CallbackURLs']
     user_pool_dict['client_logout_urls'] = user_pool_client['LogoutURLs']
     user_pool_dict['client_allowed_oauth_scopes'] = user_pool_client['AllowedOAuthScopes']
@@ -62,10 +71,20 @@ def get_user_pool_dictionary(pool_id, client_id):
     return user_pool_dict
 
 
-def get_user_pool_list(pool_id, client_id):
+def get_user_pool_list(pool_id, region, role_arn):
 
-    user_pool = Cognito(pool_id, client_id)
-    user_pool_list = user_pool.get_users()
+    sts_client = boto3.client('sts')
+    assumed_role_object = sts_client.assume_role(RoleArn=role_arn,
+                                                 RoleSessionName="cognito-list-users")
+    session = boto3.Session(
+        aws_access_key_id=assumed_role_object['Credentials']['AccessKeyId'],
+        aws_secret_access_key=assumed_role_object['Credentials']['SecretAccessKey'],
+        aws_session_token=assumed_role_object['Credentials']['SessionToken'],
+        region_name=region)
+
+    cognito_client = session.client('cognito-idp')
+
+    user_pool_list = cognito_client.list_users(UserPoolId=pool_id, Limit=60)
 
     return user_pool_list
 
@@ -75,16 +94,17 @@ if __name__ == "__main__":
     pool_args = get_args()
     user_pool_id = pool_args['user_pool_id']
     pool_client_id = pool_args['client_id']
+    pool_region = pool_args['region']
+    rolearn = pool_args['role_arn']
 
-    pool_dictionary = get_user_pool_dictionary(user_pool_id, pool_client_id)
-
-    pool_user_list = get_user_pool_list(user_pool_id, pool_client_id)
+    pool_dictionary = get_user_pool_dictionary(user_pool_id, pool_client_id, pool_region, rolearn)
 
     print ("User Pool description : ")
 
     print (json.dumps(pool_dictionary, indent=2))
 
+    pool_user_list = get_user_pool_list(user_pool_id, pool_region, rolearn)
+
     print ("User Pool users : ")
 
-    for pool_user in pool_user_list:
-        print (pool_user._data)
+    print (pool_user_list)
